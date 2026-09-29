@@ -1,0 +1,204 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/archivo';
+@import '@fontsource-variable/spline-sans-mono';
+
+/*
+  设计令牌 v2｜方向：精密计量台
+  冷调中性表面（向青相偏移极低彩度），单一深青强调色，暗墨文字，
+  层级靠"背景明度差 + 真实阴影"，细线只用于分隔内容而不是围合容器。
+  Tailwind v4 @theme：令牌名即工具类名（bg-surface / text-ink-2 / rounded-control ...）。
+  页面只使用这里声明的令牌，不写任意值。
+*/
+@theme {
+  --font-sans:
+    'Archivo Variable', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC',
+    'Source Han Sans SC', system-ui, sans-serif;
+  --font-mono: 'Spline Sans Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* 表面：画布 0.962 → 侧栏 0.936 → 面板 1.0，白色面板要能从画布上"浮"起来 */
+  --color-canvas: oklch(0.962 0.005 250);
+  --color-rail: oklch(0.936 0.007 250);
+  --color-surface: oklch(1 0 0);
+  --color-surface-2: oklch(0.978 0.003 250);
+  --color-surface-sunk: oklch(0.948 0.006 250);
+  --color-surface-hover: oklch(0.958 0.008 240);
+
+  /* 分隔线：只用于分隔内容，不用于围合容器 */
+  --color-hairline: oklch(0.918 0.007 250);
+  --color-hairline-strong: oklch(0.868 0.009 250);
+  --color-hairline-soft: oklch(0.944 0.005 250);
+
+  /* 文字 */
+  --color-ink: oklch(0.225 0.018 258);
+  --color-ink-2: oklch(0.445 0.014 258);
+  --color-ink-3: oklch(0.598 0.011 258);
+  --color-ink-inverse: oklch(0.995 0.001 250);
+
+  /* 强调色：深青（唯一强调色族，用于主操作、当前项、链接、进度） */
+  --color-accent: oklch(0.545 0.108 197);
+  --color-accent-hover: oklch(0.485 0.106 197);
+  --color-accent-ink: oklch(0.415 0.09 197);
+  --color-accent-soft: oklch(0.958 0.024 197);
+  --color-accent-hairline: oklch(0.86 0.05 197);
+
+  /* 语义色 */
+  --color-ok: oklch(0.6 0.11 148);
+  --color-ok-ink: oklch(0.42 0.09 148);
+  --color-ok-soft: oklch(0.958 0.028 148);
+
+  --color-warn: oklch(0.72 0.13 72);
+  --color-warn-ink: oklch(0.5 0.105 65);
+  --color-warn-soft: oklch(0.966 0.032 80);
+
+  --color-danger: oklch(0.565 0.155 22);
+  --color-danger-hover: oklch(0.5 0.15 22);
+  --color-danger-ink: oklch(0.45 0.14 22);
+  --color-danger-soft: oklch(0.962 0.025 22);
+
+  --color-info: oklch(0.55 0.13 268);
+  --color-info-ink: oklch(0.43 0.115 268);
+  --color-info-soft: oklch(0.96 0.026 268);
+
+  --color-violet: oklch(0.55 0.13 305);
+  --color-violet-ink: oklch(0.43 0.115 305);
+  --color-violet-soft: oklch(0.962 0.026 305);
+
+  --color-cyan: oklch(0.58 0.1 205);
+  --color-cyan-ink: oklch(0.42 0.088 205);
+  --color-cyan-soft: oklch(0.958 0.024 205);
+
+  --color-orange: oklch(0.63 0.15 48);
+  --color-orange-ink: oklch(0.48 0.13 45);
+  --color-orange-soft: oklch(0.963 0.03 55);
+
+  /* 字号阶梯：标题 24 / 小节 17 / 正文 14 / 单元格 13 / 元信息 12 */
+  --text-eyebrow: 0.71875rem;
+  --text-eyebrow--line-height: 1.2;
+  --text-eyebrow--letter-spacing: 0.06em;
+  --text-meta: 0.75rem;
+  --text-meta--line-height: 1.45;
+  --text-cell: 0.8125rem;
+  --text-cell--line-height: 1.5;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.6;
+  --text-title: 1.0625rem;
+  --text-title--line-height: 1.35;
+  --text-title--letter-spacing: -0.014em;
+  --text-figure: 1.125rem;
+  --text-figure--line-height: 1.25;
+  --text-display: 1.5rem;
+  --text-display--line-height: 1.15;
+  --text-display--letter-spacing: -0.024em;
+
+  /* 圆角：内部小件 4 / 控件 8 / 面板 12 / 浮层 16 / 仅状态标签用胶囊 */
+  --radius-xs: 4px;
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --radius-frame: 16px;
+  --radius-chip: 999px;
+
+  /* 阴影：真实的高度差，而不是描边 */
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.06), 0 12px 28px -18px rgb(15 23 42 / 0.32);
+  --shadow-pop: 0 4px 12px -2px rgb(15 23 42 / 0.12), 0 28px 56px -20px rgb(15 23 42 / 0.28);
+  --shadow-rail: 0 0 0 1px rgb(15 23 42 / 0.06);
+  --shadow-inset-line: inset 0 -1px 0 0 rgb(15 23 42 / 0.05);
+
+  /* 动效：只用指数减速，无弹跳 */
+  --ease-quart: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  --tracking-caps: 0.06em;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 1.6;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5 {
+    text-wrap: balance;
+    font-weight: 600;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  button {
+    touch-action: manipulation;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  ::selection {
+    background: var(--color-accent-soft);
+    color: var(--color-accent-ink);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-hairline-strong) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-hairline-strong);
+    background-clip: content-box;
+    border: 3px solid transparent;
+    border-radius: var(--radius-chip);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ink-3);
+    background-clip: content-box;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

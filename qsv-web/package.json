@@ -1,0 +1,15 @@
+{
+  "name": "qsv-web-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "qsv Web 数据工作台工作区",
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "dev": "pnpm --filter @qsv-web/web dev",
+    "dev:server": "pnpm --filter @qsv-web/server dev",
+    "build": "pnpm --filter @qsv-web/web build && pnpm --filter @qsv-web/server build",
+    "typecheck": "pnpm --filter @qsv-web/web typecheck && pnpm --filter @qsv-web/server typecheck",
+    "test:web": "pnpm --filter @qsv-web/web test",
+    "test:server": "pnpm --filter @qsv-web/server test"
+  }
+}

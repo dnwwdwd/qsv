@@ -1,0 +1,11 @@
+package: cloud.lazycat.app.qsv-web
+version: 0.1.0
+name: qsv 数据工作台
+description: 在个人空间内导入、整理、核对和导出表格数据
+author: qsv contributors
+license: MIT
+min_os_version: 1.5.0
+locales:
+  zh-CN:
+    name: qsv 数据工作台
+    description: 在个人空间内导入、整理、核对和导出表格数据

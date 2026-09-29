@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.vite/
+*.local
+.DS_Store
+*.log
+coverage/
+
+# The qsv repository root ignores JSON and SQL files for CLI fixture data.
+# These workspace manifests, TypeScript configs, and migrations are required.
+!package.json
+!apps/**/package.json
+!apps/**/tsconfig.json
+!apps/server/migrations/*.sql

@@ -1,0 +1,58 @@
+application:
+  image: embed:qsv-web
+  subdomain: qsv-web
+  multi_instance: false
+  run_as: 1000
+  oidc_redirect_path: /auth/oidc/callback
+  routes:
+    - /=exec://5274,/app/run.sh
+  injects:
+    - id: lazycat-file-bridge
+      on: request
+      when:
+        - /__lazycat_file_bridge/*
+      do:
+        - src: |
+            const bridgePrefix = "/__lazycat_file_bridge";
+            const requestHost = String(ctx.request.host || "").split(":")[0].toLowerCase();
+            const firstDot = requestHost.indexOf(".");
+            const method = String(ctx.request.method || "").toUpperCase();
+            if (firstDot <= 0 || !requestHost.endsWith(".heiyu.space") || !["GET", "HEAD", "PUT"].includes(method)) {
+              ctx.response.send(["GET", "HEAD", "PUT"].includes(method) ? 400 : 405, "Invalid LazyCat file bridge request");
+              return;
+            }
+            const boxDomain = requestHost.slice(firstDot + 1);
+            const targetPath = "/files/home" + ctx.request.path.slice(bridgePrefix.length);
+            ctx.headers.del("Origin");
+            ctx.headers.del("Referer");
+            ctx.proxy.to("https://file." + boxDomain, {
+              path: targetPath,
+              query: ctx.request.raw_query,
+              use_target_host: true,
+              timeout_ms: 120000,
+              on_fail: "error",
+            });
+    - id: open-save-chooser
+      on: browser
+      when:
+        - /*
+      do:
+        - src: file:///lzcapp/pkg/content/lazycat-injects/lzc-file-chooser-inject.js
+          params:
+            diskRoot: /_lzc/files/home
+            fileBridgeRoot: /__lazycat_file_bridge
+            locale: auto
+            hooks:
+              fileInput: true
+              fileSystemAccess: true
+              downloadAnchor: true
+  environment:
+    - AUTH_MODE=lazycat
+    - PORT=5274
+    - QSV_DATA_DIR=/lzcapp/var/data
+    - QSV_WEB_DIST=/app/web
+    - QSV_BIN=/app/bin/qsv
+    - QSV_SHA256_FILE=/app/bin/qsv.sha256
+    - QSV_OIDC_CLIENT_ID=${LAZYCAT_AUTH_OIDC_CLIENT_ID}
+    - QSV_OIDC_CLIENT_SECRET=${LAZYCAT_AUTH_OIDC_CLIENT_SECRET}
+    - QSV_OIDC_ISSUER=${LAZYCAT_AUTH_OIDC_ISSUER_URI}

@@ -1,0 +1,129 @@
+/*
+  复合模式：跨页面复用、用工具类表达会很啰嗦的部分。
+  其余样式一律通过 Tailwind 工具类 + 设计令牌表达。
+*/
+
+@layer components {
+  /* 分块进场：只在首次挂载时使用，靠 --enter-index 控制错峰 */
+  .enter-block {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: block-in 260ms var(--ease-quart) forwards;
+    animation-delay: calc(var(--enter-index, 0) * 90ms);
+  }
+
+  /* 数值：等宽、等宽数字，用于金额、行数、耗时、hash */
+  .figure {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1, 'zero' 1;
+  }
+
+  /* 快捷键提示：用系统字体，保证 ⌘ 这类符号不会因为西文字体缺字变成方块 */
+  .kbd {
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-size: var(--text-eyebrow);
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+  }
+
+  /* 分组小标题：字距拉开，视觉重量低于内容，但对比度要够 */
+  .eyebrow {
+    font-size: var(--text-eyebrow);
+    line-height: 1.2;
+    letter-spacing: var(--tracking-caps);
+    font-weight: 600;
+    color: var(--color-ink-2);
+  }
+
+  .data-scroll {
+    overflow: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  /* 复选框：默认外观太弱，统一成 16px 圆角方块 + 选中填充 */
+  .check {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    border-radius: var(--radius-xs);
+    background-color: var(--color-surface);
+    box-shadow: inset 0 0 0 1px var(--color-hairline-strong);
+    transition-property: background-color, box-shadow;
+    transition-duration: 140ms;
+    transition-timing-function: var(--ease-standard);
+  }
+
+  .check:hover {
+    box-shadow: inset 0 0 0 1px var(--color-ink-3);
+  }
+
+  .check:checked {
+    background-color: var(--color-accent);
+    box-shadow: inset 0 0 0 1px var(--color-accent);
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6'/%3E%3C/svg%3E");
+    background-size: 14px 14px;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .check:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* 下拉框：去掉原生箭头后必须补一个自定义指示，否则看起来像空输入框 */
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23607080' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 6.5L8 10l3.5-3.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 1rem 1rem;
+    padding-right: 2rem;
+  }
+
+  select:disabled {
+    background-image: none;
+  }
+
+  /* 按钮与可点项的按下反馈：只动 transform，可被打断 */
+  .press {
+    transition-property: transform, background-color, color, box-shadow, border-color, opacity;
+    transition-duration: 140ms;
+    transition-timing-function: var(--ease-standard);
+  }
+
+  .press:active:not(:disabled) {
+    transform: scale(0.975);
+  }
+
+  /* 不确定进度线：只表示"正在处理"，不伪造百分比 */
+  .indeterminate {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .indeterminate::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: -30%;
+    width: 30%;
+    background: var(--color-accent);
+    animation: sweep 1100ms var(--ease-standard) infinite;
+  }
+}
+
+@keyframes block-in {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sweep {
+  to {
+    transform: translateX(430%);
+  }
+}

@@ -229,6 +229,8 @@ async function runStep(input: string, outputPath: string, step: CleanStep, stepN
   let rowsIn = 0, rowsOut = 0, changed = 0, errors = 0, emptyRows = 0
   const sampleErrors: { row: number; value: string; reason?: string }[] = []
   let report: ReturnType<typeof createWriteStream> | null = null
+  const closeReport = async () => { if (report) { report.end(); await finished(report) } }
+  const abortReport = () => { report?.destroy() }
   const writeEmptyRow = async (record: string[]) => {
     if (!reportPath) return
     if (!report) {
@@ -334,10 +336,10 @@ async function runStep(input: string, outputPath: string, step: CleanStep, stepN
     }
     if (!headers) throw new CleanPlanError('数据集缺少表头')
     output.end(); await finished(output)
-    if (report) { report.end(); await finished(report) }
+    await closeReport()
     return { step: stepNumber, type: step.type, rowsIn, rowsOut, changed, errors, sampleErrors,
       ...(step.type === 'empty-row' ? { emptyRows } : {}) }
-  } catch (error) { output.destroy(); report?.destroy(); throw error }
+  } catch (error) { output.destroy(); abortReport(); throw error }
   finally { source.destroy(); parser.destroy() }
 }
 async function runDedupe(input: string, outputPath: string, step: Extract<CleanStep, { type: 'dedupe' }>,

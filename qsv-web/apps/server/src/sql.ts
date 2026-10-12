@@ -1,6 +1,6 @@
-import { Parser } from 'node-sql-parser'
+import sqlParser from 'node-sql-parser'
 
-const parser = new Parser()
+const parser = new sqlParser.Parser()
 const options = { database: 'Postgresql' }
 const allowedFunctions = new Set(['COUNT', 'SUM', 'MIN', 'MAX', 'AVG', 'ROUND', 'COALESCE', 'ABS', 'LOWER', 'UPPER', 'TRIM'])
 const forbiddenTypes = new Set(['param', 'var_string', 'origin', 'insert', 'update', 'delete', 'drop', 'create', 'alter', 'replace', 'use'])
@@ -44,7 +44,9 @@ export function validateReadOnlySql(sql: string, tableNames: string[]) {
       if (!allowedFunctions.has(functionName.toUpperCase())) throw new SqlValidationError(`函数 ${functionName} 不在允许列表中`)
     }
     if (type === 'select') {
-      if (node.into != null || node.set_op != null || node._next != null || node.locking_read != null) {
+      const into = node.into as Record<string, unknown> | null | undefined
+      if ((into != null && typeof into === 'object' && typeof into.type === 'string') ||
+        node.set_op != null || node._next != null || node.locking_read != null) {
         throw new SqlValidationError('查询包含不支持的输出、集合或锁定语法')
       }
       const local = new Set(available)
@@ -80,6 +82,6 @@ export function validateReadOnlySql(sql: string, tableNames: string[]) {
     for (const child of Object.values(node)) visit(child, available, depth + 1)
   }
   visit(ast, new Set(tableNames.map((name) => name.toLowerCase())), 0)
-  try { return parser.sqlify(ast as Parameters<Parser['sqlify']>[0], options) }
+  try { return parser.sqlify(ast as Parameters<sqlParser.Parser['sqlify']>[0], options) }
   catch { throw new SqlValidationError('SQL 无法转换为受控查询') }
 }

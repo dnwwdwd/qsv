@@ -10,6 +10,7 @@ import { WebDatabase, type ResourceRow } from './database.ts'
 import type { EngineProbe } from './engine.ts'
 import { recoverStartup } from './recovery.ts'
 import { WorkbenchService } from './service.ts'
+import { StubAuth } from './test-auth.ts'
 
 const probe: EngineProbe = {
   version: 'qsv 23.0.1-test', sha256: '0'.repeat(64), platform: 'test', verified: true, reason: null,
@@ -19,10 +20,10 @@ const probe: EngineProbe = {
 test('upload persists and another owner cannot read or import it', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'qsv-web-test-'))
   const db = new WebDatabase(directory)
-  const app = createApp(probe, { service: new WorkbenchService(db, directory, '', probe.version!), authMode: 'lazycat' })
+  const app = createApp(probe, { service: new WorkbenchService(db, directory, '', probe.version!), authMode: 'lazycat', oidc: new StubAuth() })
   try {
-    const alice = { 'x-hc-user-id': 'alice' }
-    const bob = { 'x-hc-user-id': 'bob' }
+    const alice = { 'x-test-user-id': 'alice' }
+    const bob = { 'x-test-user-id': 'bob' }
     const uploadHeaders = { ...alice, 'x-qsv-request': '1', 'x-file-name': 'sample.csv', 'idempotency-key': 'test-upload-key-0001', 'content-type': 'application/octet-stream' }
     const upload = await app.inject({ method: 'POST', url: '/api/v1/uploads', headers: uploadHeaders, payload: 'id,value\n0001,中文\n' })
     assert.equal(upload.statusCode, 201)
@@ -118,7 +119,9 @@ test('upload persists and another owner cannot read or import it', async () => {
 test('renaming a raw resource while an import waits keeps the original filename in the committed dataset', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'qsv-web-rename-import-'))
   const binary = join(directory, 'qsv-test')
-  await writeFile(binary, `#!${process.execPath}\nconst fs = require('node:fs');\nconst [command, ...args] = process.argv.slice(2);\nconst file = args.at(-1);\nif (command === 'index') fs.writeFileSync(file + '.idx', 'index');\nelse if (command === 'count') process.stdout.write(String(fs.readFileSync(file, 'utf8').trimEnd().split('\\n').length - 1));\nelse if (command === 'slice') process.stdout.write(fs.readFileSync(file, 'utf8').split('\\n')[0] + '\\n');\nelse process.exit(2);\n`)
+  // 本机 node 路径可能含空格（如 “Application Support”）；shebang 不引用空格路径会被截断，
+  // 导致 qsv 进程无法启动。用 env 查找解释器可避免这个问题。
+  await writeFile(binary, `#!/usr/bin/env node\nconst fs = require('node:fs');\nconst [command, ...args] = process.argv.slice(2);\nconst file = args.at(-1);\nif (command === 'index') fs.writeFileSync(file + '.idx', 'index');\nelse if (command === 'count') process.stdout.write(String(fs.readFileSync(file, 'utf8').trimEnd().split('\\n').length - 1));\nelse if (command === 'slice') process.stdout.write(fs.readFileSync(file, 'utf8').split('\\n')[0] + '\\n');\nelse process.exit(2);\n`)
   await chmod(binary, 0o700)
   const db = new WebDatabase(directory)
   const service = new WorkbenchService(db, directory, binary, 'qsv-test')

@@ -26,7 +26,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   }, [normalized])
   const search = useQuery({ queryKey: ['search', debouncedQuery], queryFn: () => api.search(debouncedQuery), enabled: open && debouncedQuery.length > 0 })
   const results = normalized === debouncedQuery ? search.data : undefined
-  const entries = useMemo(() => [
+  const entries = useMemo<{ id: string; title: string; detail: string; path: string; keywords?: string; scope?: string }[]>(() => [
     ...NAV_ITEMS.map((source) => localizeNavItem(source, locale)).map((item) => ({ id: item.id, title: item.label, detail: item.description, keywords: item.keyword, path: item.path,
       scope: [item.input && `${locale === 'en-US' ? 'Input' : '输入'}：${item.input}`, item.output && `${locale === 'en-US' ? 'Output' : '输出'}：${item.output}`, item.limit && `${locale === 'en-US' ? 'Limit' : '限制'}：${item.limit}`]
         .filter(Boolean).join(' · ') })),

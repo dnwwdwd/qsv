@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, RefreshCw } from 'lucide-react'
-import { api, type AppLimits, type CellPatch, type CleanupItem, type Job, type JobFilters, type Resource, type ResourceDependencies, type ResourceFilters, type Schema, type UserSettings, type ViewPlan } from '@/api/client'
+import { api, type AppLimits, type CellPatch, type CleanupItem, type CursorPage, type Job, type JobFilters, type Resource, type ResourceDependencies, type ResourceFilters, type Schema, type UserSettings, type ViewPlan } from '@/api/client'
 import { Button } from '@/ui/Button'
 import { Banner, EmptyState, Spinner } from '@/ui/Feedback'
 import { Panel } from '@/ui/Panel'
@@ -162,7 +162,7 @@ export function ResourcesPage() {
   const filtering = Object.values(applied).some((value) => value !== undefined && value !== '')
   const query = useQuery({ queryKey: ['resources', 'page', cursor, filterOffset, applied],
     queryFn: () => filtering ? api.findResources(applied, filterOffset, 50) : api.resourceCursorPage(cursor, 50), refetchInterval: 5000 })
-  const nextCursor = query.data && 'nextCursor' in query.data ? query.data.nextCursor : null
+  const nextCursor: string | null = query.data && 'nextCursor' in query.data ? (query.data as CursorPage<Resource>).nextCursor : null
   const update = (field: keyof typeof draft, value: string) => setDraft((current) => ({ ...current, [field]: value }))
   const apply = () => { setApplied({ name: draft.name.trim(), format: draft.format, kind: draft.kind, status: draft.status,
     from: draft.from ? displayDayStart(draft.from) : undefined,
@@ -430,7 +430,7 @@ export function JobsPage() {
   const filtering = Object.values(applied).some((value) => value !== undefined && value !== '')
   const query = useQuery({ queryKey: ['jobs', 'page', cursor, filterOffset, applied],
     queryFn: () => filtering ? api.findJobs(applied, filterOffset, 50) : api.jobCursorPage(cursor, 50), refetchInterval: 2000 })
-  const nextCursor = query.data && 'nextCursor' in query.data ? query.data.nextCursor : null
+  const nextCursor: string | null = query.data && 'nextCursor' in query.data ? (query.data as CursorPage<Job>).nextCursor : null
   const update = (field: keyof typeof draft, value: string) => setDraft((current) => ({ ...current, [field]: value }))
   const apply = () => { setApplied({ name: draft.name.trim(), kind: draft.kind, state: draft.state, inputId: draft.inputId.trim(),
     from: draft.from ? displayDayStart(draft.from) : undefined,

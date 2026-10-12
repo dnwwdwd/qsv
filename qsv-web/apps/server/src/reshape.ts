@@ -163,6 +163,8 @@ export async function reshapeCellStates(outputCsv: string, outputPath: string, c
     return { source, parser }
   }
   let writer: ReturnType<typeof createWriteStream> | null = null
+  const closeWriter = async () => { if (writer) { writer.end(); await finished(writer) } }
+  const abortWriter = () => { writer?.destroy() }
   let stateRows = 0
   try {
     db.pragma('journal_mode = OFF')
@@ -262,8 +264,8 @@ export async function reshapeCellStates(outputCsv: string, outputPath: string, c
         }
       } finally { output.source.destroy(); output.parser.destroy(); mapping.source.destroy(); mapping.parser.destroy() }
     }
-    if (writer) { writer.end(); await finished(writer) }
+    await closeWriter()
     return stateRows ? { file: 'cell-states.csv', rows: stateRows } : undefined
-  } catch (error) { writer?.destroy(); throw error }
+  } catch (error) { abortWriter(); throw error }
   finally { db.close(); await rm(scratchPath, { force: true }) }
 }

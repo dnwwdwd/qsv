@@ -60,13 +60,17 @@ function StatusBar() {
 export function AppShell({ children }: { children: ReactNode }) {
   const t = useT()
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const session = useQuery({ queryKey: ['session'], queryFn: api.session })
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  // 登录页是独立入口：不套工作台外壳，也不做会话拦截，否则未登录时会被 401 分支挡住。
+  const isLoginRoute = pathname === '/login'
+  const session = useQuery({ queryKey: ['session'], queryFn: api.session, enabled: !isLoginRoute })
   const settings = useQuery({ queryKey: ['settings'], queryFn: api.settings, enabled: Boolean(session.data) })
   const navigate = useNavigate()
   useEffect(() => { if (settings.data?.settings.timezone) setDisplayTimezone(settings.data.settings.timezone) }, [settings.data?.settings.timezone])
   useEffect(() => { const onKeyDown = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setPaletteOpen(true) } if (event.key === 'g' && event.altKey) void navigate({ to: '/' }) }; window.addEventListener('keydown', onKeyDown); return () => window.removeEventListener('keydown', onKeyDown) }, [navigate])
+  if (isLoginRoute) return <>{children}</>
   if (session.error instanceof ApiError && session.error.status === 401) {
-    return <main className="flex min-h-screen items-center justify-center bg-canvas px-4"><div className="w-full max-w-md rounded-control bg-surface p-6 shadow-rail"><h1 className="text-title text-ink">{t('需要重新登录', 'Sign in again')}</h1><p className="mt-3 text-cell text-ink-2">{t('当前应用会话已结束。重新登录后，可以继续读取此空间内已保存的数据。', 'Your session has ended. Sign in again to access saved data in this workspace.')}</p><a href="/auth/login" className="mt-5 inline-flex rounded-control bg-accent px-4 py-2 text-cell text-white">{t('重新登录', 'Sign in again')}</a></div></main>
+    return <main className="flex min-h-screen items-center justify-center bg-canvas px-4"><div className="w-full max-w-md rounded-control bg-surface p-6 shadow-rail"><h1 className="text-title text-ink">{t('需要重新登录', 'Sign in again')}</h1><p className="mt-3 text-cell text-ink-2">{t('当前应用会话已结束。重新登录后，可以继续读取此空间内已保存的数据。', 'Your session has ended. Sign in again to access saved data in this workspace.')}</p><a href="/login" className="mt-5 inline-flex rounded-control bg-accent px-4 py-2 text-cell text-white">{t('重新登录', 'Sign in again')}</a></div></main>
   }
   return <div className="grid h-screen grid-cols-[60px_minmax(0,1fr)] grid-rows-[1fr_30px] overflow-hidden bg-canvas lg:grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)]"><Sidebar /><div className="col-start-2 row-start-1 flex min-h-0 min-w-0 flex-col"><TopBar onOpenPalette={() => setPaletteOpen(true)} /><main className="flex min-h-0 min-w-0 flex-1 flex-col">{session.data ? <DraftScopeProvider key={session.data.user.workspaceId} workspaceId={session.data.user.workspaceId}>{children}</DraftScopeProvider> : <div className="p-6 text-cell text-ink-2">{session.error ? <><p>{t('无法读取当前会话：', 'Could not load the current session: ')}{session.error.message}</p><button className="mt-3 text-accent-ink hover:underline" onClick={() => void session.refetch()}>{t('重试', 'Retry')}</button></> : t('正在读取当前会话…', 'Loading your session…')}</div>}</main></div><StatusBar /><CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} /></div>
 }

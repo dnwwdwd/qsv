@@ -53,6 +53,7 @@ application:
     - QSV_WEB_DIST=/app/web
     - QSV_BIN=/app/bin/qsv
     - QSV_SHA256_FILE=/app/bin/qsv.sha256
+    - QSV_APP_ORIGIN=https://{{ .S.AppDomain }}
     - QSV_OIDC_CLIENT_ID=${LAZYCAT_AUTH_OIDC_CLIENT_ID}
     - QSV_OIDC_CLIENT_SECRET=${LAZYCAT_AUTH_OIDC_CLIENT_SECRET}
     - QSV_OIDC_ISSUER=${LAZYCAT_AUTH_OIDC_ISSUER_URI}

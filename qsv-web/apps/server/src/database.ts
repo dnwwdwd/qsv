@@ -104,6 +104,8 @@ export interface CompareAnnotationRow { owner_key: string; result_id: string; de
   status: 'pending' | 'verified' | 'ignored'; note: string; updated_at: number }
 
 const MIN_SQLITE = [3, 51, 3]
+/** 当前 schema 版本；迁移脚本 0001—0005 对应 1—5。备份校验必须与之一致。 */
+export const SCHEMA_VERSION = 5
 
 function versionOkay(version: string) {
   const actual = version.split('.').map(Number)

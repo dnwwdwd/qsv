@@ -5,7 +5,7 @@ import { resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import type { EngineProbe } from './engine.ts'
 import { localIdentity, type Identity } from './identity.ts'
-import type { OidcAuth } from './oidc-auth.ts'
+import type { AuthProvider } from './oidc-auth.ts'
 import { ServiceError, WorkbenchService } from './service.ts'
 import type { CsvImportOptions } from './csv.ts'
 import type { ColumnType } from './column-types.ts'
@@ -24,8 +24,12 @@ import type { CleanPlan } from './clean-plan.ts'
 import type { SqlParameters } from './sql-parameters.ts'
 import type { CellPatch } from './cell-edit.ts'
 import type { JsonExportOptions, TextExportOptions } from './export.ts'
+import type { DateInputFormat } from './transform.ts'
 import { TusUploads } from './tus.ts'
 import { ORDERS_EXAMPLE_CONTENT, ORDERS_EXAMPLE_HASH, ORDERS_EXAMPLE_IMPORT_KEY, ORDERS_EXAMPLE_NAME, ORDERS_EXAMPLE_UPLOAD_KEY } from './example.ts'
+
+/** 构建产物（含扩展名）可免鉴权读取；登录页需要它们才能渲染。 */
+const STATIC_ASSET = /\.[A-Za-z0-9]+$/u
 
 const APP_VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version
 const viewConditionSchema = { type: 'object', required: ['columnId', 'operator'], additionalProperties: false,
@@ -38,7 +42,7 @@ declare module 'fastify' {
   interface FastifyRequest { identity?: Identity }
 }
 
-interface AppOptions { service?: WorkbenchService; authMode?: 'local' | 'lazycat'; oidc?: OidcAuth; webDist?: string }
+interface AppOptions { service?: WorkbenchService; authMode?: 'local' | 'lazycat'; oidc?: AuthProvider; webDist?: string }
 
 function pageRange(query: { offset?: string; limit?: string }) {
   const offset = Number(query.offset ?? 0)
@@ -58,11 +62,21 @@ export function createApp(probe: EngineProbe, options: AppOptions = {}) {
 
   app.addHook('onRequest', async (request, reply) => {
     const path = request.url.split('?')[0]
-    if (path === '/health' || (mode === 'lazycat' && ['/auth/login', '/auth/oidc/callback', '/auth/signed-out'].includes(path))) return
+    // 登录页本身、登录回调与健康检查必须免鉴权，否则用户无法进入登录流程。
+    if (path === '/health' || path === '/login' || path.startsWith('/auth/')) return
     const identity = mode === 'lazycat' ? options.oidc?.identityFor(request) ?? null : localIdentity()
     if (!identity) {
-      if (mode === 'lazycat' && request.method === 'GET' && !path.startsWith('/api/')) return reply.redirect('/auth/login')
-      reply.code(401).send({ requestId: request.id, error: { code: 'UNAUTHENTICATED', message: '请先登录' } })
+      if (path.startsWith('/api/')) {
+        reply.code(401).send({ requestId: request.id, error: { code: 'UNAUTHENTICATED', message: '请先登录' } })
+        return
+      }
+      // 静态资源（带扩展名的构建产物）必须放行，否则登录页自身无法加载；
+      // 页面路由与深链接一律先送到登录页。这里不含任何用户数据。
+      if (request.method === 'GET' && !STATIC_ASSET.test(path)) return reply.redirect('/login')
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        reply.code(401).send({ requestId: request.id, error: { code: 'UNAUTHENTICATED', message: '请先登录' } })
+        return
+      }
       return
     }
     request.identity = identity
@@ -621,8 +635,13 @@ export function createApp(probe: EngineProbe, options: AppOptions = {}) {
                   dayTolerance: { type: 'integer', minimum: 0, maximum: 365 },
                   timeToleranceSeconds: { type: 'integer', minimum: 0, maximum: 604800 } } } },
               trimKeys: { type: 'boolean' }, ignoreKeyCase: { type: 'boolean' },
+              leftLabel: { type: 'string', maxLength: 120 }, rightLabel: { type: 'string', maxLength: 120 },
               duplicatePolicy: { type: 'string', enum: ['isolate', 'abort', 'aggregate'] },
               aggregateMethods: { type: 'array', minItems: 1, maxItems: 16, items: { type: 'string', enum: ['sum', 'count'] } },
+              emptyValuePolicy: { type: 'string', enum: ['mode-default', 'match-both', 'error'] },
+              parseFailurePolicy: { type: 'string', enum: ['isolate', 'abort'] },
+              contextLeftIds: { type: 'array', maxItems: 8, items: { type: 'string', pattern: '^c_[0-9]+$' } },
+              contextRightIds: { type: 'array', maxItems: 8, items: { type: 'string', pattern: '^c_[0-9]+$' } },
             } },
         } } },
     }, async (request, reply) => {
@@ -908,7 +927,7 @@ export function createApp(probe: EngineProbe, options: AppOptions = {}) {
         : job.kind === 'clean'
           ? originalSpec.operation === 'clean.plan' && originalSpec.plan
             ? service.submitCleanPlan(who(request.identity), rawId, originalSpec.plan as CleanPlan, key, job.id)
-            : service.submitClean(who(request.identity), rawId, originalSpec.columnId ?? '', originalSpec.mode as 'trim' | 'squeeze' | 'squeeze0' | 'lower' | 'upper' | 'replace' | 'fill-empty' | 'nfc' | 'nfkc' | 'date-iso', key, job.id, originalSpec.find ?? '', originalSpec.replacement ?? '', originalSpec.dateFormat ?? 'yyyy-MM-dd')
+            : service.submitClean(who(request.identity), rawId, originalSpec.columnId ?? '', originalSpec.mode as 'trim' | 'squeeze' | 'squeeze0' | 'lower' | 'upper' | 'replace' | 'fill-empty' | 'nfc' | 'nfkc' | 'date-iso', key, job.id, originalSpec.find ?? '', originalSpec.replacement ?? '', (originalSpec.dateFormat ?? 'yyyy-MM-dd') as DateInputFormat)
           : job.kind === 'edit'
             ? service.submitCellEdits(who(request.identity), rawId, originalSpec.sourceHash ?? '', originalSpec.patches ?? [], key, job.id)
           : job.kind === 'export'
@@ -960,9 +979,6 @@ export function createApp(probe: EngineProbe, options: AppOptions = {}) {
       } finally { reply.raw.off('close', onClose) }
     })
 
-    app.get('/api/v1/recipes', async () => {
-      throw new ServiceError(501, 'OPERATION_UNAVAILABLE', '模板与流程尚未接入')
-    })
   }
 
   app.setNotFoundHandler(async (request, reply) => {

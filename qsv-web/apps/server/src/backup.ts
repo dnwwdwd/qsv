@@ -8,7 +8,7 @@ import Database from 'better-sqlite3'
 import { isCommit, readCommit, syncDirectory, syncFile, verifyCommit, ensureDurableDirectory } from './commit.ts'
 import { digestFile } from './files.ts'
 import { acquireInstanceLock, preparePrivateDataDir } from './instance-lock.ts'
-import { WebDatabase } from './database.ts'
+import { SCHEMA_VERSION, WebDatabase } from './database.ts'
 import { recoverStartup } from './recovery.ts'
 
 interface BackupFile { path: string; sha256: string; bytes: number }
@@ -242,7 +242,7 @@ export async function restoreBackup(backupDir: string, targetDir: string) {
     const database = new Database(join(staging, 'meta.sqlite'), { readonly: true, fileMustExist: true })
     try {
       if (database.pragma('quick_check', { simple: true }) !== 'ok' ||
-        (database.pragma('user_version', { simple: true }) as number) > 4) throw new Error('备份数据库校验失败或版本过高')
+        (database.pragma('user_version', { simple: true }) as number) > SCHEMA_VERSION) throw new Error('备份数据库校验失败或版本过高')
       const resources = database.prepare("SELECT id,owner_key,kind,status,storage_relpath,content_hash,metadata_json FROM resources WHERE storage_relpath IS NOT NULL AND status IN ('ready','trashed')").all() as StoredResource[]
       if (resources.length !== value.resourceCount) throw new Error('备份资源数量与数据库不一致')
       for (const row of resources) {

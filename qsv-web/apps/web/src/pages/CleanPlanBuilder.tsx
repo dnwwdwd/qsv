@@ -1,7 +1,7 @@
 import { useSessionDraft } from '@/ui/useSessionDraft'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, type CleanPlan, type CleanStep, type Schema } from '@/api/client'
+import { api, type CleanStep, type Schema } from '@/api/client'
 import { Button } from '@/ui/Button'
 import { Banner } from '@/ui/Feedback'
 import { SectionTitle } from '@/ui/Page'

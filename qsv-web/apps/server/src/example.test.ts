@@ -8,6 +8,7 @@ import { WebDatabase } from './database.ts'
 import type { EngineProbe } from './engine.ts'
 import { ORDERS_EXAMPLE_CONTENT, ORDERS_EXAMPLE_NAME } from './example.ts'
 import { WorkbenchService } from './service.ts'
+import { StubAuth } from './test-auth.ts'
 
 const probe: EngineProbe = { version: 'qsv-test', sha256: '0'.repeat(64), platform: 'test', verified: true, reason: null,
   operations: { 'table.count': true, 'table.preview.indexed': true } }
@@ -16,9 +17,9 @@ test('built-in example creates one real owner-scoped import and keeps its source
   const directory = await mkdtemp(join(tmpdir(), 'qsv-web-example-'))
   const db = new WebDatabase(directory)
   const service = new WorkbenchService(db, directory, 'missing-qsv-test-binary', 'qsv-test')
-  const app = createApp(probe, { service, authMode: 'lazycat' })
-  const alice = { 'x-hc-user-id': 'alice', 'x-qsv-request': '1' }
-  const bob = { 'x-hc-user-id': 'bob', 'x-qsv-request': '1' }
+  const app = createApp(probe, { service, authMode: 'lazycat', oidc: new StubAuth() })
+  const alice = { 'x-test-user-id': 'alice', 'x-qsv-request': '1' }
+  const bob = { 'x-test-user-id': 'bob', 'x-qsv-request': '1' }
   try {
     const first = await app.inject({ method: 'POST', url: '/api/v1/examples/orders/import', headers: alice })
     assert.equal(first.statusCode, 202)

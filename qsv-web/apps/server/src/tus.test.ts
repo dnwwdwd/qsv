@@ -10,19 +10,20 @@ import { createApp } from './app.ts'
 import { WebDatabase } from './database.ts'
 import type { EngineProbe } from './engine.ts'
 import { WorkbenchService } from './service.ts'
+import { StubAuth } from './test-auth.ts'
 
 const probe: EngineProbe = {
   version: 'qsv-test', sha256: '0'.repeat(64), platform: 'test', verified: true, reason: null,
   operations: { 'table.count': true, 'table.preview.indexed': true },
 }
-const alice = { 'x-hc-user-id': 'alice' }
-const bob = { 'x-hc-user-id': 'bob' }
+const alice = { 'x-test-user-id': 'alice' }
+const bob = { 'x-test-user-id': 'bob' }
 const write = { 'x-qsv-request': '1' }
 
 async function openApp(directory: string) {
   const db = new WebDatabase(directory)
   const service = new WorkbenchService(db, directory, '', 'qsv-test')
-  const app = createApp(probe, { service, authMode: 'lazycat' })
+  const app = createApp(probe, { service, authMode: 'lazycat', oidc: new StubAuth() })
   await app.listen({ host: '127.0.0.1', port: 0 })
   const address = app.server.address()
   assert(address && typeof address !== 'string')
@@ -69,8 +70,14 @@ test('tus resumes across a server restart, isolates owners, and commits one raw 
     })
     assert.equal(last.status, 204)
     const uploadId = location.split('/').at(-1)!
-    const workspaceId = (await readdir(join(directory, 'owners')))[0]!
-    const metadataPath = join(directory, 'owners', workspaceId, 'uploads', 'tus', `${uploadId}.json`)
+    // 该测试同时创建 alice 与 bob 两个 owner 目录，按名称排序取第一个可能取到 bob。
+    // 直接定位真正持有本次上传元数据的 owner 目录，避免依赖目录排序。
+    let metadataPath = ''
+    for (const workspace of await readdir(join(directory, 'owners'))) {
+      const candidate = join(directory, 'owners', workspace, 'uploads', 'tus', `${uploadId}.json`)
+      try { await readFile(candidate); metadataPath = candidate; break } catch { /* 继续找 */ }
+    }
+    assert(metadataPath, '未找到本次上传的 tus 元数据')
     const beforeCommit = await readFile(metadataPath)
     const committed = await fetch(`${running.base}${location}/commit`, { method: 'POST', headers: { ...alice, ...write, 'idempotency-key': key } })
     assert.equal(committed.status, 201)

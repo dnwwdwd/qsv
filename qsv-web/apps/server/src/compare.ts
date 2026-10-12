@@ -93,7 +93,8 @@ async function* preparedRows(path: string, signal?: AbortSignal): AsyncGenerator
 
 class GroupReader {
   private pending: PreparedRow | null = null
-  constructor(private readonly iterator: AsyncIterator<PreparedRow>) {}
+  private readonly iterator: AsyncIterator<PreparedRow>
+  constructor(iterator: AsyncIterator<PreparedRow>) { this.iterator = iterator }
   async next() {
     const first = this.pending ?? (await this.iterator.next()).value ?? null
     this.pending = null
@@ -132,7 +133,7 @@ export async function inspectSortedKeys(path: string, keyIds: string[], expected
     }
     if (result.rows !== expectedRows) throw new CompareError('核对键预检行数与输入数据集不一致')
     return result
-  } finally { await iterator.return?.() }
+  } finally { await iterator.return?.(undefined) }
 }
 
 function decimal(value: string) {
@@ -394,5 +395,5 @@ export async function compareSortedInputs(leftPath: string, rightPath: string, o
     await once(output, 'finish')
     return summary
   } catch (error) { output.destroy(); throw error }
-  finally { await leftIterator.return?.(); await rightIterator.return?.() }
+  finally { await leftIterator.return?.(undefined); await rightIterator.return?.(undefined) }
 }

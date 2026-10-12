@@ -110,7 +110,7 @@ export async function* readStructuredJson(path: string, format: 'json' | 'jsonl'
   const source = createReadStream(path, { signal })
   const parser = parserStream({ jsonStreaming: format === 'jsonl', packValues: false, streamValues: true })
   const parts = dataPath ? pointerParts(dataPath) : null
-  const selector = parts ? pick.asStream({ once: true, filter: (stack: (string | number)[]) =>
+  const selector = parts ? pick.asStream({ once: true, filter: (stack: (string | number | null)[]) =>
     stack.length >= parts.length && parts.every((part, index) => stack[index] === part) }) : null
   source.on('error', (error) => parser.destroy(error))
   utf8.on('error', (error) => parser.destroy(error))

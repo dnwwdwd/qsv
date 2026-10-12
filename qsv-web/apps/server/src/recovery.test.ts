@@ -93,7 +93,7 @@ test('startup restores committed files and interrupts jobs without a complete ch
     assert.equal(db.getJob(ownerKey, jobId)?.state, 'succeeded')
     assert.equal(db.getResource(ownerKey, unfinishedId)?.status, 'failed')
     assert.equal(db.getJob(ownerKey, unfinishedJobId)?.state, 'interrupted')
-    assert.deepEqual(await recoverStartup(db, directory), { rawRestored: 0, importsRestored: 0, interrupted: 0, partialsRemoved: 0, orphanDirectoriesRemoved: 0, tusExpired: 0 })
+    assert.deepEqual(await recoverStartup(db, directory), { rawRestored: 0, importsRestored: 0, exportsRestored: 0, interrupted: 0, partialsRemoved: 0, orphanDirectoriesRemoved: 0, tusExpired: 0 })
 
     db.db.prepare('UPDATE resources SET row_count = 2 WHERE id = ?').run(datasetId)
     await assert.rejects(recoverStartup(db, directory), /元数据与提交凭据不一致/)

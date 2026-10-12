@@ -21,7 +21,7 @@ import { CompareError, compareSortedInputs, inspectSortedKeys, prepareCompareInp
 import { SqlValidationError, validateReadOnlySql } from './sql.ts'
 import { validDecimalRange, validTolerance, writeQualityReport, type QualityOutputMode, type QualityRule } from './quality.ts'
 import { JsonImportError, jsonImportOptions, normalizeJsonToFile, previewJson, type JsonImportOptions } from './json-import.ts'
-import { applyCleanPlanParameters, bindRecipe, cleanPlanParameterNames, recipeFromJob, recipeInputCount, RecipeValidationError, validateRecipeSpec,
+import { applyCleanPlanParameters, bindRecipe, cleanPlanParameterNames, normalizeEngineVersion, recipeFromJob, recipeInputCount, RecipeValidationError, validateRecipeSpec,
   type BoundRecipe, type PipelineRecipeSpec, type RecipeRef, type RecipeSpec, type SingleRecipeSpec } from './recipe.ts'
 import { SplitError, countSplitFiles, writeSplitFiles, writeSplitZip, type SplitConfig, type SplitManifest } from './split.ts'
 import { writeHorizontalConcat } from './horizontal.ts'
@@ -91,6 +91,11 @@ function parseCursor(value: string, kind: 'res' | 'job') {
   return { createdAt, id: value.slice(match[1].length + 1) }
 }
 function cursorFor(row: { created_at: number; id: string }) { return `${row.created_at}.${row.id}` }
+/** 去掉文件名中的路径分隔符与控制字符，供派生名称使用。 */
+function sanitizeFileNameBase(value: string) {
+  return value.replace(/[\\/\x00-\x1f\x7f]/gu, ' ').replace(/\s+/gu, ' ').trim()
+}
+
 function metadata(row: ResourceRow) { return JSON.parse(row.metadata_json) as Record<string, unknown> }
 function hasScopedFill(plan: CleanPlan) {
   return plan.steps.some((step) => step.enabled !== false && step.type === 'fill' && step.scope && step.scope !== 'all')
@@ -479,7 +484,7 @@ export class WorkbenchService {
     const deadline = setTimeout(() => abort.abort('timeout'), 30 * 1000)
     deadline.unref()
     try {
-      const path = await checkedResourcePath(this.dataDir, owner.workspaceId, resource.storage_relpath)
+      const path = await checkedResourcePath(this.dataDir, owner.workspaceId, resource.storage_relpath!)
       const source = createReadStream(path, { signal: abort.signal })
       const parser = parseCsvStream({ bom: true, relax_quotes: false, relax_column_count: false, max_record_size: 8 * 1024 * 1024 })
       source.on('error', (error) => parser.destroy(error))
@@ -804,7 +809,8 @@ export class WorkbenchService {
       throw new ServiceError(422, 'RECIPE_INPUT_COUNT', '输入数量与模板不一致或包含重复资源')
     }
     const compatibility = JSON.parse(recipe.compatibility_json) as { engineVersion?: string }
-    if (compatibility.engineVersion && compatibility.engineVersion !== this.engineVersion) {
+    if (compatibility.engineVersion &&
+      normalizeEngineVersion(compatibility.engineVersion) !== normalizeEngineVersion(this.engineVersion)) {
       problems.push(`模板记录的引擎版本为 ${compatibility.engineVersion}，当前为 ${this.engineVersion}`)
     }
     const sources = sourceIds.map((id, index) => {
@@ -2180,7 +2186,10 @@ export class WorkbenchService {
     const jobId = `job_${randomUUID()}`
     const exportId = `res_${randomUUID()}`
     const customBase = outputName?.trim().replace(new RegExp(`\\.${format}$`, 'iu'), '')
-    const fileName = `${customBase || (workbook && workbook.sourceIds.length > 1 ? '多数据集工作簿' : source.name.replace(/\.[^.]+$/, '').slice(0, report ? 205 : 220))}${report ? ' · 核对报告' : ''}.${format}`
+    // 派生文件名会写进 commit.json 并用于下载头，必须去掉路径分隔符与控制字符：
+    // 例如核对结果数据集名固定含 “ / ”，直接沿用会让提交凭据校验失败、服务无法重启。
+    const derivedBase = sanitizeFileNameBase(source.name.replace(/\.[^.]+$/, '')).slice(0, report ? 205 : 220) || '导出'
+    const fileName = `${customBase || (workbook && workbook.sourceIds.length > 1 ? '多数据集工作簿' : derivedBase)}${report ? ' · 核对报告' : ''}.${format}`
     const output: ResourceRow = {
       id: exportId, owner_key: owner.ownerKey, kind: 'export', status: 'building', name: fileName, format,
       group_id: exportId, version: 1, source_ids_json: JSON.stringify(inputIds), producer_job_id: jobId,
@@ -3942,19 +3951,13 @@ export class WorkbenchService {
         const validation = spec.relationConfig.cardinality === 'one-to-one' ? 'onetoone' :
           spec.relationConfig.cardinality === 'one-to-many' ? 'onetomany' :
           spec.relationConfig.cardinality === 'many-to-one' ? 'manytoone' : 'none'
-        const decimalKeys = spec.relationConfig.keyType === 'decimal'
-        const preparedKeys = decimalKeys || spec.relationConfig.trimKeys === true ||
-          spec.relationConfig.ignoreCase === true || Boolean(spec.relationConfig.unicodeNormalization &&
-            spec.relationConfig.unicodeNormalization !== 'none')
-        const leftKeys = spec.relationConfig.leftKeyIds.map((id, index) =>
-          String(preparedKeys ? preflight.leftWidth + 1 + index : Number(id.slice(2)) + 1)).join(',')
-        const rightKeys = spec.relationConfig.rightKeyIds.map((id, index) =>
-          String(preparedKeys ? preflight.rightWidth + 1 + index : Number(id.slice(2)) + 1)).join(',')
-        const normalization = !preparedKeys && spec.relationConfig.unicodeNormalization && spec.relationConfig.unicodeNormalization !== 'none'
-          ? ['--norm-unicode', spec.relationConfig.unicodeNormalization] : []
+        // joinp 只接受列名，且内/左连接会自动合并同名连接列、丢掉右侧连接列。
+        // 因此在预备阶段为两侧各生成独立连接列，这里始终按这些列名连接；
+        // 大小写、去空白、十进制与 Unicode 规范化都已在预备阶段完成。
+        const leftKeys = spec.relationConfig.leftKeyIds.map((_, index) => `__left_join_key_${index}__`).join(',')
+        const rightKeys = spec.relationConfig.rightKeyIds.map((_, index) => `__right_join_key_${index}__`).join(',')
         await runQsv(this.binary, ['joinp', ...flags, ...ordering, '--cache-schema', '-1', '--validate', validation,
           ...(spec.relationConfig.matchEmptyKeys ? ['--nulls'] : []),
-          ...(!preparedKeys && spec.relationConfig.ignoreCase ? ['--ignore-case'] : []), ...normalization,
           '--quiet', '--output', partial, leftKeys, leftPrepared, rightKeys, rightPrepared], abort.signal,
           256 * 1024, this.limits.taskTimeoutMinutes * 60 * 1000)
         if (spec.relationConfig.kind === 'left-semi' || spec.relationConfig.kind === 'left-anti') {
@@ -4171,7 +4174,7 @@ export class WorkbenchService {
     const exportRows = spec.scope ? spec.scope.endRow - spec.scope.startRow + 1 : sources.reduce((sum, item) => sum + (item!.row_count ?? 0), 0)
     const exportColumns = spec.scope ? spec.scope.columnIds.length : Math.max(...sources.map((item) => item!.column_count ?? 0))
     try {
-      let sourcePath = await checkedResourcePath(this.dataDir, owner.workspaceId, source.storage_relpath)
+      let sourcePath = await checkedResourcePath(this.dataDir, owner.workspaceId, source.storage_relpath!)
       await ensureDurableDirectory(this.dataDir, dirname(relpath))
       this.db.setJobState(owner.ownerKey, jobId, 'running', { mode: 'stage', percent: null, stage: '写出完整数据' }, null)
       if (spec.scope) {
@@ -4253,7 +4256,7 @@ export class WorkbenchService {
       } else if (spec.format === 'csv' && !spec.safeText && !spec.textOptions) {
         await pipeline(createReadStream(sourcePath), createWriteStream(partial, { flags: 'wx', mode: 0o600 }), { signal: abort.signal })
       } else {
-        const written = await writeTextExport(sourcePath, partial, spec.format, spec.safeText, abort.signal, spec.textOptions)
+        const written = await writeTextExport(sourcePath, partial, spec.format as 'csv' | 'tsv', spec.safeText, abort.signal, spec.textOptions)
         if (written.rows !== exportRows) throw new QsvCommandError('导出记录数与输入不一致')
       }
       if (spec.scope) await rm(sourcePath, { force: true })
@@ -4334,7 +4337,7 @@ export class WorkbenchService {
           ? ['apply', 'emptyreplace', '--replacement', spec.replacement ?? '', '--output', partial, String(columnIndex + 1), sourcePath]
           : spec.mode === 'replace'
             ? ['apply', 'operations', 'replace', '--comparand', spec.find ?? '', '--replacement', spec.replacement ?? '', '--jobs', '1', '--output', partial, String(columnIndex + 1), sourcePath]
-            : ['apply', 'operations', spec.mode, '--jobs', '1', '--output', partial, String(columnIndex + 1), sourcePath]
+            : ['apply', 'operations', spec.mode!, '--jobs', '1', '--output', partial, String(columnIndex + 1), sourcePath]
         : ['search', '--not-one', '--jobs', '1', '--select', String(columnIndex + 1),
             spec.mode === 'equals' ? '--exact' : '--literal', '--quiet', '--output', partial, spec.value ?? '', sourcePath]
       let removedRows = 0

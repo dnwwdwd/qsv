@@ -23,6 +23,8 @@ export async function mapCellStates(sourceReport: string, rowMap: string, output
     return { source, parser }
   }
   let writer: ReturnType<typeof createWriteStream> | null = null
+  const closeWriter = async () => { if (writer) { writer.end(); await finished(writer) } }
+  const abortWriter = () => { writer?.destroy() }
   try {
     db.pragma('journal_mode = OFF')
     db.pragma('synchronous = OFF')
@@ -75,10 +77,10 @@ export async function mapCellStates(sourceReport: string, rowMap: string, output
         }
       }
       if (outputRow !== expectedOutputRows) throw new CellStateLineageError('筛选结果行号映射数量不一致')
-      if (writer) { writer.end(); await finished(writer) }
+      await closeWriter()
       return stateRows ? { file: 'cell-states.csv', rows: stateRows } : undefined
     } finally { mapping.source.destroy(); mapping.parser.destroy() }
-  } catch (error) { writer?.destroy(); throw error }
+  } catch (error) { abortWriter(); throw error }
   finally { db.close(); await rm(scratchPath, { force: true }) }
 }
 
@@ -93,6 +95,8 @@ export async function copyCellStatesForEdits(sourceReport: string, outputPath: s
   source.on('error', (error) => parser.destroy(error))
   source.pipe(parser)
   let writer: ReturnType<typeof createWriteStream> | null = null
+  const closeWriter = async () => { if (writer) { writer.end(); await finished(writer) } }
+  const abortWriter = () => { writer?.destroy() }
   let sawHeader = false, stateRows = 0
   try {
     for await (const row of parser as AsyncIterable<string[]>) {
@@ -119,9 +123,9 @@ export async function copyCellStatesForEdits(sourceReport: string, outputPath: s
       stateRows += 1
     }
     if (!sawHeader) throw new CellStateLineageError('空值来源清单为空')
-    if (writer) { writer.end(); await finished(writer) }
+    await closeWriter()
     return stateRows ? { file: 'cell-states.csv', rows: stateRows } : undefined
-  } catch (error) { writer?.destroy(); throw error }
+  } catch (error) { abortWriter(); throw error }
   finally { source.destroy(); parser.destroy() }
 }
 
@@ -130,6 +134,8 @@ export async function mergeCellStates(inputs: { reportPath?: string; rowCount: n
   outputPath: string, includeAbsentFields = false, signal?: AbortSignal) {
   const keptFields = new Set(outputHeaders)
   let writer: ReturnType<typeof createWriteStream> | null = null
+  const closeWriter = async () => { if (writer) { writer.end(); await finished(writer) } }
+  const abortWriter = () => { writer?.destroy() }
   let offset = 0, stateRows = 0
   const writeState = async (row: string[]) => {
     if (!writer) {
@@ -181,15 +187,17 @@ export async function mergeCellStates(inputs: { reportPath?: string; rowCount: n
       }
       offset += input.rowCount
     }
-    if (writer) { writer.end(); await finished(writer) }
+    await closeWriter()
     return stateRows ? { file: 'cell-states.csv', rows: stateRows } : undefined
-  } catch (error) { writer?.destroy(); throw error }
+  } catch (error) { abortWriter(); throw error }
 }
 
 /** 横向拼接保留各输入相同行号的状态；短表尾部补出的空单元格记为缺字段。 */
 export async function horizontalCellStates(inputs: { reportPath?: string; rowCount: number; headers: string[] }[],
   outputHeaders: string[], outputRows: number, outputPath: string, signal?: AbortSignal) {
   let writer: ReturnType<typeof createWriteStream> | null = null
+  const closeWriter = async () => { if (writer) { writer.end(); await finished(writer) } }
+  const abortWriter = () => { writer?.destroy() }
   let stateRows = 0, columnOffset = 0
   const writeState = async (row: number, field: string, reason: string) => {
     if (!writer) {
@@ -243,9 +251,9 @@ export async function horizontalCellStates(inputs: { reportPath?: string; rowCou
       columnOffset += input.headers.length
     }
     if (columnOffset !== outputHeaders.length) throw new CellStateLineageError('横向拼接结果字段数量不一致')
-    if (writer) { writer.end(); await finished(writer) }
+    await closeWriter()
     return stateRows ? { file: 'cell-states.csv', rows: stateRows } : undefined
-  } catch (error) { writer?.destroy(); throw error }
+  } catch (error) { abortWriter(); throw error }
 }
 
 /** 在 qsv 的逐字段统计后附加原始缺字段与显式 null 数量；两者仍计入原有空文本统计。 */

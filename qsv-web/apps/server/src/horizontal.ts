@@ -24,7 +24,7 @@ export async function writeHorizontalConcat(paths: string[], outputPath: string,
   try {
     const first = await Promise.all(inputs.map((input) => input.iterator.next()))
     if (first.some((item) => item.done || !item.value?.length)) throw new HorizontalError('横向拼接输入缺少表头')
-    const headers = first.map((item) => item.value!)
+    const headers: string[][] = first.map((item) => item.value as string[])
     if (headers.reduce((sum, columns) => sum + columns.length, 0) > 4096) throw new HorizontalError('横向拼接超过 4096 列')
     const used = new Set<string>()
     const combined = headers.flatMap((columns, sourceIndex) => columns.map((name, columnIndex) => {

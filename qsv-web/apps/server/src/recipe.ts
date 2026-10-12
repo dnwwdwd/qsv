@@ -92,6 +92,15 @@ export type BoundRecipe =
 
 export class RecipeValidationError extends Error {}
 
+/**
+ * qsv --version 会把运行时的空闲/已用内存写进版本串（如 “12.80 GiB-535.44 MiB-7.77 GiB-16.00 GiB”）。
+ * 这些数字每次启动都会变化，不代表引擎能力差异，比较版本兼容性时必须忽略，否则同一二进制重启后
+ * 旧模板会被误报为引擎版本不兼容。
+ */
+export function normalizeEngineVersion(version: string): string {
+  return version.replace(/\d+(?:\.\d+)?\s*[KMGT]iB/gu, '').replace(/\s+/gu, ' ').trim()
+}
+
 const cleanParameterFields: Record<string, string[]> = {
   text: ['find', 'replacement'], fill: ['value'], number: ['prefix', 'suffix'],
   add: ['value', 'separator'], filter: ['value'],
@@ -465,7 +474,7 @@ export function validateRecipeSpec(raw: unknown): RecipeSpec {
       const columns = value.columns.map((entry) => {
         const column = object(entry)
         if (column.side !== 'left' && column.side !== 'right') throw new RecipeValidationError('关联输出来源无效')
-        return { side: column.side, name: shortText(column.name, '关联输出字段名') }
+        return { side: column.side as 'left' | 'right', name: shortText(column.name, '关联输出字段名') }
       })
       if (new Set(columns.map((column) => `${column.side}:${column.name}`)).size !== columns.length) {
         throw new RecipeValidationError('关联输出字段重复')

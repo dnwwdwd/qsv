@@ -2,8 +2,11 @@ import { createReadStream, createWriteStream } from 'node:fs'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { parse } from 'csv-parse'
-import { decode as iconvDecode, encode as iconvEncode } from 'iconv-lite'
+import iconv from 'iconv-lite'
 import type { ExportScope } from './export-scope.ts'
+
+const iconvDecode = iconv.decode
+const iconvEncode = iconv.encode
 
 function protectFormula(value: string) {
   return /^\s*[=+\-@]/u.test(value) || /^[\t\r]/u.test(value) ? `'${value}` : value

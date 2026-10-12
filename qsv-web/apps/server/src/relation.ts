@@ -76,8 +76,6 @@ export function validateRelationConfig(config: RelationConfig, leftWidth: number
 export async function prepareRelation(leftPath: string, rightPath: string, leftPrepared: string, rightPrepared: string,
   indexPath: string, config: RelationConfig, expectedLeft: number, expectedRight: number, signal?: AbortSignal,
   unmatchedReports?: { leftPath: string; rightPath: string }) {
-  const preparedKeys = config.keyType === 'decimal' || config.trimKeys || config.ignoreCase ||
-    config.unicodeNormalization && config.unicodeNormalization !== 'none'
   const db = new Database(indexPath)
   db.pragma('journal_mode = DELETE')
   db.exec('CREATE TABLE keys (key TEXT PRIMARY KEY, left_count INTEGER NOT NULL DEFAULT 0, right_count INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID')
@@ -104,7 +102,7 @@ export async function prepareRelation(leftPath: string, rightPath: string, leftP
         if (!headers) {
           headers = row
           await write(csvLine([...row.map((_, index) => `${side}_c_${index}`), `__${side}_source_row__`,
-            ...(preparedKeys ? keyIds.map((_, index) => `__${side}_join_key_${index}__`) : [])]))
+            ...keyIds.map((_, index) => `__${side}_join_key_${index}__`)]))
           continue
         }
         rows += 1
@@ -118,8 +116,7 @@ export async function prepareRelation(leftPath: string, rightPath: string, leftP
         }
         if (pending.length >= 1000 || pendingBytes >= 2 * 1024 * 1024) { addBatch(pending, side); pending = []; pendingBytes = 0 }
         await write(csvLine([...row, String(rows).padStart(16, '0'),
-          ...(config.keyType === 'decimal' ? values.map((value) => value ? `D:${value}` : '') :
-            preparedKeys ? values : [])]))
+          ...(config.keyType === 'decimal' ? values.map((value) => value ? `D:${value}` : '') : values)]))
       }
       if (!headers) throw new RelationError(`${side} 输入缺少表头`)
       if (pending.length) addBatch(pending, side)
@@ -278,6 +275,8 @@ export async function relationCellStates(inputPath: string, outputPath: string, 
     return { source, parser }
   }
   let output: ReturnType<typeof createWriteStream> | null = null
+  const closeOutput = async () => { if (output) { output.end(); await finished(output) } }
+  const abortOutput = () => { output?.destroy() }
   let stateRows = 0
   try {
     db.pragma('journal_mode = OFF')
@@ -372,10 +371,10 @@ export async function relationCellStates(inputPath: string, outputPath: string, 
         }
       }
       if (!header || outputRow !== expectedOutputRows) throw new RelationError('关联结果行数与空值来源处理不一致')
-      if (output) { output.end(); await finished(output) }
+      await closeOutput()
       return stateRows ? { file: 'cell-states.csv', rows: stateRows } : undefined
     } finally { source.source.destroy(); source.parser.destroy() }
-  } catch (error) { output?.destroy(); throw error }
+  } catch (error) { abortOutput(); throw error }
   finally { db.close(); await rm(scratchPath, { force: true }) }
 }
 

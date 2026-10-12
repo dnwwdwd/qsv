@@ -108,7 +108,7 @@ export function CompareResultPage() {
       </Panel> : null}
       {resource.isLoading ? <Spinner /> : null}
       {resource.error ? <Banner tone="danger" title={t('结果读取失败', 'Could not load results')}>{resource.error.message}</Banner> : null}
-      {resourceId && resource.data && !summary ? <Banner tone="warning">{t('此资源没有已完成的双表核对汇总。', 'This resource has no completed comparison summary.')}</Banner> : null}
+      {resourceId && resource.data && !summary ? <Banner tone="warn">{t('此资源没有已完成的双表核对汇总。', 'This resource has no completed comparison summary.')}</Banner> : null}
       {summary ? <><Panel className="max-w-5xl space-y-4"><SectionTitle title={t('核对汇总', 'Comparison summary')} /><p className="text-cell text-ink-2">{t('左侧：', 'Left: ')}{labels?.leftLabel || sources[0]?.data?.name || t('左侧数据', 'Left data')}{t('；右侧：', '; right: ')}{labels?.rightLabel || sources[1]?.data?.name || t('右侧数据', 'Right data')}{t('。名称来自本次固定规则，原数据集版本仍以来源资源为准。', '. Labels come from the fixed rules for this comparison; source resource IDs determine dataset versions.')}</p><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {([[t('左侧输入', 'Left input'), summary.leftRows], [t('右侧输入', 'Right input'), summary.rightRows], [t('一致匹配对', 'Equal pairs'), summary.equalPairs], [t('字段差异匹配对', 'Differing pairs'), summary.differentPairs],
           [t('字段解析异常对', 'Parse-error pairs'), summary.pairErrors], [t('仅左记录', 'Left-only records'), summary.leftOnly], [t('仅右记录', 'Right-only records'), summary.rightOnly], [t('左侧键冲突记录', 'Left key conflicts'), summary.leftConflict],

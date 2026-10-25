@@ -96,6 +96,13 @@ function sanitizeFileNameBase(value: string) {
   return value.replace(/[\\/\x00-\x1f\x7f]/gu, ' ').replace(/\s+/gu, ' ').trim()
 }
 
+/** 1 起始列号转 Excel 列标（1→A、26→Z、30→AD）。 */
+function excelColumnLabel(column: number) {
+  let name = ''
+  for (let value = column; value > 0;) { value -= 1; name = String.fromCharCode(65 + value % 26) + name; value = Math.floor(value / 26) }
+  return name
+}
+
 function metadata(row: ResourceRow) { return JSON.parse(row.metadata_json) as Record<string, unknown> }
 function hasScopedFill(plan: CleanPlan) {
   return plan.steps.some((step) => step.enabled !== false && step.type === 'fill' && step.scope && step.scope !== 'all')
@@ -1406,10 +1413,18 @@ export class WorkbenchService {
     if (!sheets.some((sheet) => sheet.name === sheetName)) throw new ServiceError(422, 'SHEET_NOT_FOUND', '指定的工作表不存在')
     const raw = this.db.getResource(owner.ownerKey, id)!
     const path = await checkedResourcePath(this.dataDir, owner.workspaceId, raw.storage_relpath!)
+    const meta = sheets.find((sheet) => sheet.name === sheetName)!
+    // qsv excel 的 --range 与工作表已用区域按 (末行, 末列) 元组做字典序比较：请求末行到达工作表
+    // 末行且列数超出实际列数、或末行超出，都会报 larger than sheet，因此按元信息行列数夹取范围。
+    const sheetLastRow = typeof meta.rowCount === 'number' && meta.rowCount >= 1 ? meta.rowCount : null
+    const endColumn = excelColumnLabel(Math.min(30, typeof meta.columnCount === 'number' && meta.columnCount >= 1 ? meta.columnCount : 30))
+    if (options.header === 'first-row' && sheetLastRow !== null && options.headerRow + (options.headerRowCount ?? 1) - 1 > sheetLastRow) {
+      throw new ServiceError(422, 'SHEET_HEADER_RANGE', '表头行超出工作表已有行数，请调整表头行或行范围配置')
+    }
     const first = options.dataStartRow
-    const last = Math.min(first + 19, options.dataEndRow ?? first + 19)
-    const headerRange = `A${options.headerRow}:AD${options.headerRow + (options.headerRowCount ?? 1) - 1}`
-    const dataRange = `A${first}:AD${last}`
+    const last = Math.min(first + 19, options.dataEndRow ?? first + 19, sheetLastRow ?? first + 19)
+    const headerRange = `A${options.headerRow}:${endColumn}${Math.min(options.headerRow + (options.headerRowCount ?? 1) - 1, sheetLastRow ?? options.headerRow + (options.headerRowCount ?? 1) - 1)}`
+    const dataRange = first <= last ? `A${first}:${endColumn}${last}` : null
     let directory: string | null = null
     try {
       const relative = join('owners', owner.workspaceId, 'previews')
@@ -1417,8 +1432,12 @@ export class WorkbenchService {
       directory = await mkdtemp(join(this.dataDir, relative, 'sheet-'))
       const header = options.header === 'first-row' ? await runQsv(this.binary,
         ['excel', '--sheet', sheetName, '--range', headerRange, path], undefined, 2 * 1024 * 1024, 60_000) : ''
-      const data = await runQsv(this.binary, ['excel', '--sheet', sheetName, '--range', dataRange, path], undefined,
-        2 * 1024 * 1024, 60_000)
+      const data = dataRange ? await runQsv(this.binary, ['excel', '--sheet', sheetName, '--range', dataRange, path], undefined,
+        2 * 1024 * 1024, 60_000) : ''
+      if (!header && !data) {
+        return { headers: [], rows: [], sampleRows: 0, totalKnown: false as const, columnCount: meta.columnCount ?? 0,
+          columnsTruncated: false, sampleRange: dataRange ?? headerRange, sheetName }
+      }
       const combined = join(directory, 'sample.csv')
       await writeFile(combined, `${header}${header.endsWith('\n') || !header ? '' : '\n'}${data}`, { flag: 'wx', mode: 0o600 })
       const preview = await previewCsv(combined, { ...options, encoding: 'utf-8', delimiter: ',', quote: '"',

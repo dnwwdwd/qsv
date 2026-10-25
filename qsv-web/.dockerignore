@@ -5,3 +5,6 @@ docs
 lazycat/*.lpk
 lazycat/dist
 *.log
+# 收集型镜像的产物目录例外（见 lzc/Dockerfile）
+!.lzc-image-src
+!.lzc-image-src/**

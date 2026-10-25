@@ -102,7 +102,7 @@ export function ResourceDetailPage() {
         </div> : null}
         <div className="flex flex-wrap gap-4 border-t border-hairline-soft pt-4 text-cell">
           {item.status === 'ready' && item.kind === 'dataset' ? <Link to="/datasets/$resourceId" params={{ resourceId }} className="text-accent-ink hover:underline">{t('浏览数据', 'Browse data')}</Link> : null}
-          {item.status === 'ready' && (item.kind === 'raw' || item.kind === 'dataset' || item.kind === 'export') ? <a href={api.downloadUrl(resourceId)} className="text-accent-ink hover:underline">{t('下载完整文件', 'Download complete file')}</a> : null}
+          {item.status === 'ready' && (item.kind === 'raw' || item.kind === 'dataset' || item.kind === 'export') ? <button type="button" onClick={() => { void api.downloadResource(resourceId, item.name) }} className="cursor-pointer text-accent-ink hover:underline">{t('下载完整文件', 'Download complete file')}</button> : null}
           {item.producerJobId ? <Link to="/jobs/$jobId" params={{ jobId: item.producerJobId }} className="text-accent-ink hover:underline">{t('查看生成任务', 'View producing job')}</Link> : null}
         </div>
         {item.kind === 'dataset' ? <div className="space-y-2 border-t border-hairline-soft pt-4 text-cell"><p className="font-medium text-ink">{t('版本与生成记录', 'Versions and creation history')}</p>

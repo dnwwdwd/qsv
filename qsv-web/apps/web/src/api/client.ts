@@ -247,6 +247,29 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   return result
 }
 
+function attachmentFilename(disposition: string | null): string | undefined {
+  if (!disposition) return undefined
+  const extended = /filename\*=(?:UTF-8|utf-8)''([^;]+)/.exec(disposition)
+  if (extended) {
+    try { return decodeURIComponent(extended[1].replace(/^"|"$/g, '')) || undefined } catch { return undefined }
+  }
+  return /filename="?([^";]+)"?/.exec(disposition)?.[1] || undefined
+}
+
+async function downloadFromUrl(url: string, fallbackName: string) {
+  const response = await fetch(url, { credentials: 'same-origin' })
+  if (!response.ok) throw new ApiError('REQUEST_FAILED', '下载失败', response.status)
+  const blob = await response.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = blobUrl
+  anchor.download = attachmentFilename(response.headers.get('content-disposition')) ?? fallbackName
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+}
+
 export const api = {
   session: async () => (await call<{ user: { name: string; workspaceId: string; role: 'admin' | 'normal' }; source: string }>('/api/v1/session')),
   logout: async () => call<{ signedOut: boolean }>('/api/v1/logout', { method: 'POST' }),
@@ -467,6 +490,8 @@ export const api = {
   rows: async (viewId: string, offset: number, limit: number, signal?: AbortSignal) => (await call<{ block: RowBlock }>(`/api/v1/views/${encodeURIComponent(viewId)}/rows?offset=${offset}&limit=${limit}`, { signal })).block,
   cell: async (viewId: string, rowIndex: number, columnId: string, signal?: AbortSignal) => (await call<{ cell: CellResult }>(`/api/v1/views/${encodeURIComponent(viewId)}/cells/${rowIndex}/${encodeURIComponent(columnId)}`, { signal })).cell,
   downloadUrl: (id: string) => `/api/v1/resources/${encodeURIComponent(id)}/download`,
+  downloadResource: async (id: string, fallbackName: string) => downloadFromUrl(api.downloadUrl(id), fallbackName),
+  downloadFromUrl: (url: string, fallbackName: string) => downloadFromUrl(url, fallbackName),
   cleanReportUrl: (id: string, step: number, kind: 'errors' | 'duplicates' | 'empty-rows') => `/api/v1/resources/${encodeURIComponent(id)}/clean-reports/${step}/${kind}`,
   relationReportUrl: (id: string, side: 'left' | 'right') => `/api/v1/resources/${encodeURIComponent(id)}/relation-reports/${side}`,
   jsonImportReportUrl: (id: string) => `/api/v1/resources/${encodeURIComponent(id)}/json-import-report`,

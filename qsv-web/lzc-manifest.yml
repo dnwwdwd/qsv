@@ -1,0 +1,68 @@
+application:
+  subdomain: qsv-web
+  oidc_redirect_path: /auth/oidc/callback
+  routes:
+    - /=http://web.cloud.lazycat.app.qsv-web.lzcapp:5274
+  injects:
+    # 懒猫文件桥：让官方选择器脚本以同源方式访问云盘文件域
+    - id: lazycat-file-bridge
+      on: request
+      when:
+        - /__lazycat_file_bridge/*
+      do:
+        - src: |
+            const bridgePrefix = "/__lazycat_file_bridge";
+            const requestHost = String(ctx.request.host || "").split(":")[0].toLowerCase();
+            const firstDot = requestHost.indexOf(".");
+            const method = String(ctx.request.method || "").toUpperCase();
+            if (firstDot <= 0 || !requestHost.endsWith(".heiyu.space") || !["GET", "HEAD", "PUT"].includes(method)) {
+              ctx.response.send(["GET", "HEAD", "PUT"].includes(method) ? 400 : 405, "Invalid LazyCat file bridge request");
+              return;
+            }
+            const boxDomain = requestHost.slice(firstDot + 1);
+            const targetPath = "/files/home" + ctx.request.path.slice(bridgePrefix.length);
+            ctx.headers.del("Origin");
+            ctx.headers.del("Referer");
+            ctx.proxy.to("https://file." + boxDomain, {
+              path: targetPath,
+              query: ctx.request.raw_query,
+              use_target_host: true,
+              timeout_ms: 120000,
+              on_fail: "error",
+            });
+    # 懒猫文件拦截器：拦截文件选择、系统文件对话框与下载动作
+    - id: lazycat-file-chooser
+      on: browser
+      when:
+        - /*
+      do:
+        - src: file:///lzcapp/pkg/content/lzc/lazycat-injects/lzc-file-chooser-inject.js
+          params:
+            diskRoot: /_lzc/files/home
+            fileBridgeRoot: /__lazycat_file_bridge
+            locale: auto
+            hooks:
+              fileInput: true
+              fileSystemAccess: true
+              downloadAnchor: true
+
+services:
+  web:
+    image: registry.lazycat.cloud/u30387910/c1own123/qsv-web:8e7e09728b67d930
+    user: "0"
+    command: sh /lzcapp/pkg/content/lzc/run.sh
+    binds:
+      - /lzcapp/var/data:/lzcapp/var/data
+      - /lzcapp/cache:/lzcapp/cache
+    environment:
+      - AUTH_MODE=lazycat
+      - PORT=5274
+      - QSV_DATA_DIR=/lzcapp/var/data
+      - QSV_WEB_DIST=/app/web
+      - QSV_BIN=/app/bin/qsv
+      - QSV_SHA256_FILE=/app/bin/qsv.sha256
+      - QSV_APP_ORIGIN=https://{{ .S.AppDomain }}
+      - QSV_OIDC_CLIENT_ID=${LAZYCAT_AUTH_OIDC_CLIENT_ID}
+      - QSV_OIDC_CLIENT_SECRET=${LAZYCAT_AUTH_OIDC_CLIENT_SECRET}
+      - QSV_OIDC_ISSUER=${LAZYCAT_AUTH_OIDC_ISSUER_URI}
+      - TMPDIR=/lzcapp/cache

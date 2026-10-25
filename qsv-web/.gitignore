@@ -6,6 +6,11 @@ dist/
 *.log
 coverage/
 
+# LPK 打包产物
+lzc-dist/
+.lzc-image-src/
+*.lpk
+
 # The qsv repository root ignores JSON and SQL files for CLI fixture data.
 # These workspace manifests, TypeScript configs, and migrations are required.
 !package.json

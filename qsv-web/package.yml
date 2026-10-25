@@ -1,0 +1,24 @@
+package: cloud.lazycat.app.qsv-web
+version: 0.1.0
+name: 数据工作台
+description: 基于 qsv 表格引擎的数据工作台，在个人空间内导入 CSV、Excel、JSON、Parquet 等表格文件，进行清洗、转换、核对、统计分析并导出结果。
+license: MIT
+min_os_version: "1.5.0"
+
+locales:
+  zh:
+    name: "数据工作台"
+    description: "基于 qsv 表格引擎的数据工作台，在个人空间内导入 CSV、Excel、JSON、Parquet 等表格文件，进行清洗、转换、核对、统计分析并导出结果。"
+  zh_CN:
+    name: "数据工作台"
+    description: "基于 qsv 表格引擎的数据工作台，在个人空间内导入 CSV、Excel、JSON、Parquet 等表格文件，进行清洗、转换、核对、统计分析并导出结果。"
+  en:
+    name: "Data Workbench"
+    description: "A tabular data workbench powered by the qsv engine: import CSV, Excel, JSON or Parquet files, then clean, transform, reconcile, analyze and export them in your personal space."
+  ja:
+    name: "データワークベンチ"
+    description: "qsv エンジンを基盤とする表データのワークベンチ。CSV・Excel・JSON・Parquet を取り込み、クリーニング・変換・照合・集計を行い、結果をエクスポートします。"
+
+permissions:
+  required:
+    - net.internet
